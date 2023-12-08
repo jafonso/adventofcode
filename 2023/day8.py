@@ -90,7 +90,7 @@ if __name__ == "__main__":
             if n in visited_node_dict_list[i] and n[2] == 'Z':
                 if (count_2 - visited_node_dict_list[i][n]) != visited_node_dict_list[i][n]:
                     print("Least common multiple not possible. Offset required.")
-                    print(loop_size_list)
+                    print("loop: ", count_2 - visited_node_dict_list[i][n], "offset: ", visited_node_dict_list[i][n])
                     exit(1)
                 loop_size_list[i] = count_2 - visited_node_dict_list[i][n]
             else:
