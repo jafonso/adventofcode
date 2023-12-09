@@ -26,7 +26,5 @@ if __name__ == "__main__":
 
     results_list = [prev_next_value(seq) for seq in sequences]
     result_2_list, result_1_list = zip(*results_list)
-    result_1 = sum(result_1_list)
-    result_2 = sum(result_2_list)
-    aocutils.printResult(1, result_1)
-    aocutils.printResult(1, result_2)
+    aocutils.printResult(1, sum(result_1_list))
+    aocutils.printResult(1, sum(result_2_list))
