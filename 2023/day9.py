@@ -23,8 +23,7 @@ if __name__ == "__main__":
     #input_data = test_array
 
     sequences = parse_data(input_data)
-
     results_list = [prev_next_value(seq) for seq in sequences]
     result_2_list, result_1_list = zip(*results_list)
     aocutils.printResult(1, sum(result_1_list))
-    aocutils.printResult(1, sum(result_2_list))
+    aocutils.printResult(2, sum(result_2_list))
