@@ -79,19 +79,15 @@ if __name__ == "__main__":
 
     #### Part 1 ####
 
-    counts_list = []
-    for spring_str, spring_groups in springs_list:
-        counts_list.append(count_arrangements(spring_str, spring_groups))
-    aocutils.printResult(1, sum(counts_list))
+    counts_list_1 = [count_arrangements(spring_str, spring_groups) for spring_str, spring_groups in springs_list]
+    aocutils.printResult(1, sum(counts_list_1))
 
 
     #### Part 2 ####
 
     springs_list_unfolded = unfold_data(springs_list, 5)
-    counts_list = []
-    for spring_str, spring_groups in springs_list_unfolded:
-        counts_list.append(count_arrangements(spring_str, spring_groups))
-    aocutils.printResult(2, sum(counts_list))
+    counts_list_2 = [count_arrangements(spring_str, spring_groups) for spring_str, spring_groups in springs_list_unfolded]
+    aocutils.printResult(2, sum(counts_list_2))
     
 
 
