@@ -66,7 +66,7 @@ def search_path(map: List[str], starting_coords: Tuple[int, int]):
 
     # Insert starting node on the heap
     next_node_heap.pushOrModify((x,y), value)
-    node_dist_dict[x,y] = value
+    node_dist_dict[x,y] = 0
     prev_node_dict[x,y] = (None, None)
 
     while len(next_node_heap) > 0:
