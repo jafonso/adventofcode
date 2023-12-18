@@ -54,7 +54,6 @@ def count_area(instructions: List[Tuple[Direction, int, str]]):
     x, y = 0, 0
 
     prev_horizontal = None
-    prev_vertical = None
     prev_y = 0
 
     # In order to complete the cycle, we first need to go back and look at the last two iterations of the loop
@@ -62,18 +61,13 @@ def count_area(instructions: List[Tuple[Direction, int, str]]):
     prev_direction_2, prev_length_2 = instructions[-2]
     if prev_direction_1 == Direction.RIGHT or prev_direction_1 == Direction.LEFT:
         prev_horizontal = prev_direction_1
-    else:
-        prev_vertical = prev_direction_1
-        prev_y = y - prev_length_1
-    if prev_direction_2 == Direction.RIGHT or prev_direction_2 == Direction.LEFT:
-        prev_horizontal = prev_direction_2
-    else:
-        prev_vertical = prev_direction_2
         prev_y = y - prev_length_2
+    else:
+        prev_horizontal = prev_direction_2
+        prev_y = y - prev_length_1
 
     # Confirm that we found both vertical and horizonal previous directions
     assert prev_horizontal is not None
-    assert prev_vertical is not None
 
     for direction, lenght in instructions:
         if direction == Direction.RIGHT:
