@@ -33,17 +33,39 @@ class Direction(Enum):
     LEFT = 3
     RIGHT = 4
 
-class HeapDict:
-    heap = []
-    key_dict = {}
+class WeirdDict:
+    def __init__(self):
+        self.min_val = None
+        self.items_by_val = {}
+        self.key_dict = {}
     def pop(self):
-        key = self.heap.pop()
-        return (key, self.key_dict.pop(key))
+        if self.min_val is None:
+            raise RuntimeError("No items in WeirdDict")
+        val = self.min_val
+        # Remove oldest item, considering python dict keeps order
+        val_dict = self.items_by_val[self.min_val]
+        key = next(iter(val_dict))
+        val_dict.pop(key)
+        if len(val_dict) == 0:
+            del self.items_by_val[self.min_val]
+            self.min_val = min(self.items_by_val.keys()) if self.items_by_val else None
+        return key, val
     def pushOrModify(self, key, value):
-        if key not in self.key_dict:
-            self.heap.append(key)
+        # Remove old first
+        if key in self.key_dict:
+            old_val = self.key_dict
+            val_dict = self.items_by_val[old_val]
+            val_dict.pop(key)
+            if len(val_dict) == 0:
+                del self.items_by_val[self.min_val]
+        # Add again
         self.key_dict[key] = value
-        self.heap.sort(key=lambda k: self.key_dict[k], reverse=True)
+        if value not in self.items_by_val:
+            self.items_by_val[value] = {}
+            self.items_by_val[value][key] = None # Value is irrelevant here
+            self.min_val = min(self.items_by_val.keys()) # Update min value
+        else:
+            self.items_by_val[value][key] = None
     def __len__(self):
         return len(self.key_dict)
 
@@ -62,7 +84,7 @@ def search_path(map: List[str], starting_coords: Tuple[int, int], min_steps: int
     max_x = len(map[0])
     max_y = len(map)
 
-    next_node_heap = HeapDict()
+    next_node_heap = WeirdDict()
     node_dist_dict = {}
     prev_node_dict = {}
 
@@ -143,19 +165,14 @@ if __name__ == "__main__":
 
     #### Part 1 ####
     
-    prev_node_dict, node_dist_dict = search_path(input_data, (0,0), min_steps=1, max_steps=3)
-
-    last_x, last_y = len(input_data[0])-1, len(input_data)-1
-    x, y, direction, distance = get_lowest_node_on(node_dist_dict, last_x, last_y)
-    last_dir, last_dist = direction, distance
-    value = node_dist_dict[x, y, direction, distance]
-
-    (x_prev, y_prev, dir_prev, dist_prev), value_prev = prev_node_dict[x, y, direction, distance]
-    while x_prev != None:
-        #print((x_prev, y_prev), f"({value_prev} + {input_data[y][x]}) ->", (x, y), f"({value})")
-        (x_prev, y_prev, dir_prev, dist_prev), value_prev = prev_node_dict[x_prev, y_prev, dir_prev, dist_prev]
-        (x, y,  direction, distance), value = prev_node_dict[x, y, direction, distance]
-
-    aocutils.printResult(1, node_dist_dict[last_x, last_y, last_dir, last_dist])
+    _, node_dist_dict_1 = search_path(input_data, (0,0), min_steps=1, max_steps=3)
+    last_x1, last_y1 = len(input_data[0])-1, len(input_data)-1
+    node_tuple_1 = get_lowest_node_on(node_dist_dict_1, last_x1, last_y1)
+    aocutils.printResult(1, node_dist_dict_1[node_tuple_1])
 
     #### Part 2 ####
+
+    _, node_dist_dict_2 = search_path(input_data, (0,0), min_steps=4, max_steps=10)
+    last_x2, last_y2 = len(input_data[0])-1, len(input_data)-1
+    node_tuple_2 = get_lowest_node_on(node_dist_dict_2, last_x2, last_y2)
+    aocutils.printResult(2, node_dist_dict_2[node_tuple_2])
