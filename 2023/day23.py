@@ -207,7 +207,7 @@ if __name__ == "__main__":
 
     aocutils.printResult(1, find_longest_hike(nodes, edges, True))
 
-    #### Part 1 ####
+    #### Part 2 ####
 
     aocutils.printResult(2, find_longest_hike(nodes, edges, False))
 
