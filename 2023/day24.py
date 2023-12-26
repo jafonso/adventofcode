@@ -126,6 +126,10 @@ def scale_down(v):
     return v // divisor
 
 def calculate_rock_trajectory(hailstones: List[Tuple[Tuple[int,int,int], Tuple[int,int,int]]]):
+
+    # Normalize all hails referential to hail #0 (choosed arbitrarily).
+    # The hail #0 will end with a starting position and velocity of ((0,0,0), (0,0,0)). This makes following calculations easier.
+
     (hail_0_ref_p, hail_0_ref_v), norm_hailstones = normalize_hail(hailstones)
 
     norm_hailstones_0 = norm_hailstones[0]
@@ -136,28 +140,38 @@ def calculate_rock_trajectory(hailstones: List[Tuple[Tuple[int,int,int], Tuple[i
     hail_1_pos, hail_1_vel = norm_hailstones_1
     hail_2_pos, hail_2_vel = norm_hailstones_2
 
+    # Use vector of hail #1 and #2, together with hail #0 (a single dot!), to calculate the normal
+    # vectors of planes 1 and 2.
+    # NOTE: It's important to scale down the result!!!! (we don't care about vector mudule for now, just the direction)
+
     n_plane_1 = scale_down(np.cross(hail_1_pos, hail_1_vel))
     n_plane_2 = scale_down(np.cross(hail_2_pos, hail_2_vel))
 
+    # Calculate the vector of the intersection between the two planes
+    # NOTE: It's important to scale down the result!!!! (we don't care about vector mudule for now, just the direction)
+
     vel_par = scale_down(np.cross(n_plane_1, n_plane_2))
 
-
-    ########
-
+    # We know that the rock passes by origin (hail #0), and has a direction given by the vector calculated previously
     temp_rock_vect = (hail_0_pos, vel_par)
+
+    # Calculate intersection times between rock, hail #1, hail #2
+    # The time of the rock will be wrong but we don't care
+    # We will know the time of intersection of hail #1 and hail #2, which will also be the correct time of the rock vector
     _, (t_1, _) = get_intersection_xy(norm_hailstones_1, temp_rock_vect)
     _, (t_2, _) = get_intersection_xy(norm_hailstones_2, temp_rock_vect)
 
+    # Based on the times obtained, calculate the colision coordinates
     colision_coords_1 = np.array(norm_hailstones_1[0], dtype=np.float128) + (t_1 * np.array(norm_hailstones_1[1], dtype=np.float128))
     colision_coords_2 = np.array(norm_hailstones_2[0], dtype=np.float128) + (t_2 * np.array(norm_hailstones_2[1], dtype=np.float128))
 
+    # Calculate the correct coordinates and velocity of the rock
     t_diff = t_2 - t_1
     coord_diff = np.array(colision_coords_2, dtype=np.float128) - np.array(colision_coords_1, dtype=np.float128)
-
     vel = coord_diff / t_diff
     pos = np.array(colision_coords_1, dtype=np.float128) - (t_1 * vel)
 
-    # Get back the real values
+    # Get back the real values!! (reverse the referential transformation)
     vel_real = vel + np.array(hail_0_ref_v, dtype=np.float128)
     pos_real = pos + np.array(hail_0_ref_p, dtype=np.float128)
 
