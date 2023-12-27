@@ -30,14 +30,10 @@ class Module:
         self.name = name
     
     def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
-        self.input_gates.append(None)
-        idx = len(self.input_gates) - 1
-        def set_input_func(input: Optional[Pulse]):
-            self.input_gates[idx] = input
-        return set_input_func
+        raise NotImplemented() 
 
-    def config_output_cable(self, output_module): 
-        self.output_cables.append(output_module)
+    def config_output_cable(self, output_cable): 
+        self.output_cables.append(output_cable)
 
     def tick(self):
         raise NotImplemented()
@@ -78,6 +74,13 @@ class Cable:
     def get_count(self):
         return self.count_low, self.count_high
 
+class Dummy(Module):
+    
+    def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
+        def set_input_func(input: Optional[Pulse]):
+            pass
+        return set_input_func
+
 class Button(Module):
 
     def __init__(self, name: str):
@@ -86,6 +89,9 @@ class Button(Module):
 
     def push_button(self):
         self.button_pushed = True
+
+    def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
+        raise RuntimeError("Button should not have an input cable") 
 
     def tick(self):
         if len(self.output_cables) != 1:
@@ -98,11 +104,20 @@ class Button(Module):
 
 class Broadcaster(Module):
 
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.input_gate = None
+
+    def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
+        if self.input_gate:
+            raise RuntimeError("Input of broadcaster already set")
+        def set_input_func(input: Optional[Pulse]):
+            self.input_gate = input
+        return set_input_func
+
     def tick(self):
-        if len(self.input_gates) != 1:
-            raise RuntimeError("Broadcaster should have exactly 1 input")
         for cable in self.output_cables:
-            cable.set_input_value(self.input_gates[0])
+            cable.set_input_value(self.input_gate)
 
 class Conjunction(Module):
 
@@ -112,11 +127,9 @@ class Conjunction(Module):
         self.last_input_val: List[Pulse] = []
 
     def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
-        func = super().get_input_func()
         self.last_input_val.append(Pulse.LOW)
         idx = len(self.last_input_val) - 1
         def set_input_func(input: Optional[Pulse]):
-            func(input)
             if input is not None:
                 self.pulse_received = True
                 self.last_input_val[idx] = input
@@ -141,12 +154,23 @@ class FlipFlop(Module):
 
     def __init__(self, name: str):
         super().__init__(name)
+        self.pulse_received = False
+        self.input_gates: List[Pulse] = []
         self.position = self.FlipFlopState.OFF
+
+    def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
+        self.input_gates.append(None)
+        idx = len(self.input_gates) - 1
+        def set_input_func(input: Optional[Pulse]):
+            if input is not None:
+                self.pulse_received = True
+            self.input_gates[idx] = input
+        return set_input_func
 
     def tick(self):
         if len(self.input_gates) == 0:
             raise RuntimeError("FlopFlop should has no inputs")
-        if any(input == Pulse.LOW for input in self.input_gates):
+        if self.pulse_received and any(input == Pulse.LOW for input in self.input_gates):
             if self.position == self.FlipFlopState.ON:
                 self.position = self.FlipFlopState.OFF
                 for cable in self.output_cables:
@@ -158,6 +182,7 @@ class FlipFlop(Module):
         else:
             for cable in self.output_cables:
                 cable.set_input_value(None) # Do not output anything
+        self.pulse_received = False
 
 def parse_data(input: List[str]) -> Tuple[Dict[str, Module], List[Cable]]:
     parsed_entries = []
@@ -192,17 +217,19 @@ def parse_data(input: List[str]) -> Tuple[Dict[str, Module], List[Cable]]:
         _, module_name, to_module_name_list = parsed_entry
         for to_module_name in to_module_name_list:
             # If to_module does not exist, add a dummy one
-            cables.append(Cable(module_dict[module_name], module_dict.get(to_module_name, Module(to_module_name))))
+            cables.append(Cable(module_dict[module_name], module_dict.get(to_module_name, Dummy(to_module_name))))
 
     return module_dict, cables
 
-def tick_once(module_dict: Dict[str, Module], cables: List[Cable]):
+def tick_once(module_dict: Dict[str, Module], cables: List[Cable], *, debug: bool=False):
     # Return True if there are still cables with active values
     for module in module_dict.values():
         module.tick()
+    if debug:
+        print()
+        print_cables(cables)
     for cable in cables:
         cable.tick()
-    return not all(cable.is_inactive() for cable in cables)
 
 def print_cables(cables: List[Cable]):
     for cable in cables:
@@ -211,17 +238,15 @@ def print_cables(cables: List[Cable]):
 
 def press_button_and_run(module_dict: Dict[str, Module], cables: List[Cable], *, debug: bool=False):
     module_dict["button"].push_button()
-    tick_once(module_dict, cables)
-    if debug:
-        print_cables(cables)
+    tick_once(module_dict, cables, debug=debug)
     while not all(cable.is_inactive() for cable in cables):
-        tick_once(module_dict, cables)
-        if debug: 
-            print_cables(cables)
+        tick_once(module_dict, cables, debug=debug)
 
-def press_button_n_times(module_dict: Dict[str, Module], cables: List[Cable], press_count: int):
+def press_button_n_times(module_dict: Dict[str, Module], cables: List[Cable], press_count: int, *, debug: bool=False):
     for _ in range(press_count):
-        press_button_and_run(module_dict, cables)
+        press_button_and_run(module_dict, cables, debug=debug)
+        if debug:
+            print("################################")
 
 def count_pulses(cables: List[Cable]):
     # Return tuple: low_pulse, high_pulse
@@ -237,11 +262,8 @@ if __name__ == "__main__":
 
     module_dict, cables = parse_data(input_data) # Parse data for part 1
 
-    print()
-    press_button_and_run(module_dict, cables, debug=True)
-
-    #press_button_n_times(module_dict, cables, 1000)
-    #low_pulses, high_pulses = count_pulses(cables)
-    #aocutils.printResult(1, low_pulses * high_pulses)
+    press_button_n_times(module_dict, cables, 3, debug= True)
+    low_pulses, high_pulses = count_pulses(cables)
+    aocutils.printResult(1, (low_pulses * high_pulses))
 
     #### Part 1 ####
