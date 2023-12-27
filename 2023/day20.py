@@ -1,4 +1,5 @@
 import aocutils
+import collections
 from enum import Enum
 from typing import Optional, Callable, List, Dict, Tuple
 
@@ -67,6 +68,7 @@ class Cable:
         elif self.value == Pulse.HIGH:
             self.count_high += 1
         self.to_module_gate_func(self.value)
+        return self.to_module
 
     def is_inactive(self):
         return self.value is None
@@ -80,6 +82,9 @@ class Dummy(Module):
         def set_input_func(input: Optional[Pulse]):
             pass
         return set_input_func
+    
+    def tick(self):
+        return []
 
 class Button(Module):
 
@@ -99,8 +104,10 @@ class Button(Module):
         if self.button_pushed:
             self.output_cables[0].set_input_value(Pulse.LOW)
             self.button_pushed = False
+            return self.output_cables
         else:
             self.output_cables[0].set_input_value(None)
+            return []
 
 class Broadcaster(Module):
 
@@ -118,33 +125,29 @@ class Broadcaster(Module):
     def tick(self):
         for cable in self.output_cables:
             cable.set_input_value(self.input_gate)
+        return self.output_cables
 
 class Conjunction(Module):
 
     def __init__(self, name: str):
         super().__init__(name)
-        self.pulse_received = False
         self.last_input_val: List[Pulse] = []
 
     def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
         self.last_input_val.append(Pulse.LOW)
         idx = len(self.last_input_val) - 1
-        def set_input_func(input: Optional[Pulse]):
-            if input is not None:
-                self.pulse_received = True
-                self.last_input_val[idx] = input
+        def set_input_func(input: Pulse):
+            self.last_input_val[idx] = input
         return set_input_func
 
     def tick(self):
-        if not self.pulse_received:
-            out_pulse = None
-        elif all(last_input == Pulse.HIGH for last_input in self.last_input_val):
-            out_pulse = Pulse.LOW 
+        if all(last_input == Pulse.HIGH for last_input in self.last_input_val):
+            out_pulse = Pulse.LOW
         else:
             out_pulse = Pulse.HIGH
         for cable in self.output_cables:
             cable.set_input_value(out_pulse)
-        self.pulse_received = False
+        return self.output_cables
 
 class FlipFlop(Module):
 
@@ -154,23 +157,18 @@ class FlipFlop(Module):
 
     def __init__(self, name: str):
         super().__init__(name)
-        self.pulse_received = False
-        self.input_gates: List[Pulse] = []
+        self.last_input: Pulse = None
         self.position = self.FlipFlopState.OFF
 
     def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
-        self.input_gates.append(None)
-        idx = len(self.input_gates) - 1
         def set_input_func(input: Optional[Pulse]):
-            if input is not None:
-                self.pulse_received = True
-            self.input_gates[idx] = input
+            self.last_input = input
         return set_input_func
 
     def tick(self):
-        if len(self.input_gates) == 0:
-            raise RuntimeError("FlopFlop should has no inputs")
-        if self.pulse_received and any(input == Pulse.LOW for input in self.input_gates):
+        if self.input_gates is None:
+            raise RuntimeError("FlopFlop should has no input")
+        if self.last_input == Pulse.LOW:
             if self.position == self.FlipFlopState.ON:
                 self.position = self.FlipFlopState.OFF
                 for cable in self.output_cables:
@@ -179,10 +177,9 @@ class FlipFlop(Module):
                 self.position = self.FlipFlopState.ON
                 for cable in self.output_cables:
                     cable.set_input_value(Pulse.HIGH)
+            return self.output_cables
         else:
-            for cable in self.output_cables:
-                cable.set_input_value(None) # Do not output anything
-        self.pulse_received = False
+            return []
 
 def parse_data(input: List[str]) -> Tuple[Dict[str, Module], List[Cable]]:
     parsed_entries = []
@@ -221,30 +218,25 @@ def parse_data(input: List[str]) -> Tuple[Dict[str, Module], List[Cable]]:
 
     return module_dict, cables
 
-def tick_once(module_dict: Dict[str, Module], cables: List[Cable], *, debug: bool=False):
-    # Return True if there are still cables with active values
-    for module in module_dict.values():
-        module.tick()
-    if debug:
-        print()
-        print_cables(cables)
-    for cable in cables:
-        cable.tick()
+def press_button_and_run(module_dict: Dict[str, Module], *, debug: bool=False):
+    
+    next_cables_to_process = collections.deque()
 
-def print_cables(cables: List[Cable]):
-    for cable in cables:
-        if not cable.is_inactive():
-            print(cable)
-
-def press_button_and_run(module_dict: Dict[str, Module], cables: List[Cable], *, debug: bool=False):
     module_dict["button"].push_button()
-    tick_once(module_dict, cables, debug=debug)
-    while not all(cable.is_inactive() for cable in cables):
-        tick_once(module_dict, cables, debug=debug)
+    next_cables_to_process.extend(module_dict["button"].tick())
 
-def press_button_n_times(module_dict: Dict[str, Module], cables: List[Cable], press_count: int, *, debug: bool=False):
+    while next_cables_to_process:
+        next_cable = next_cables_to_process.popleft()
+        if next_cable.is_inactive():
+            raise RuntimeError("Cable is inactive")
+        next_module = next_cable.tick()
+        if debug:
+            print(next_cable)
+        next_cables_to_process.extend(next_module.tick())
+
+def press_button_n_times(module_dict: Dict[str, Module], press_count: int, *, debug: bool=False):
     for _ in range(press_count):
-        press_button_and_run(module_dict, cables, debug=debug)
+        press_button_and_run(module_dict, debug=debug)
         if debug:
             print("################################")
 
@@ -262,7 +254,7 @@ if __name__ == "__main__":
 
     module_dict, cables = parse_data(input_data) # Parse data for part 1
 
-    press_button_n_times(module_dict, cables, 3, debug= True)
+    press_button_n_times(module_dict, 1000, debug=False)
     low_pulses, high_pulses = count_pulses(cables)
     aocutils.printResult(1, (low_pulses * high_pulses))
 
