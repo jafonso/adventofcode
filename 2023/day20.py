@@ -1,5 +1,7 @@
 import aocutils
 import collections
+import operator
+from functools import reduce
 from enum import Enum
 from typing import Optional, Callable, List, Dict, Tuple
 
@@ -76,12 +78,25 @@ class Cable:
     def get_count(self):
         return self.count_low, self.count_high
 
-class Dummy(Module):
+class RX(Module):
     
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.low_pulse = False
+
     def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
-        def set_input_func(input: Optional[Pulse]):
-            pass
+        def set_input_func(input: Pulse):
+            if input == Pulse.LOW:
+                self.low_pulse = True
+            else:
+                self.low_pulse = False
         return set_input_func
+    
+    def config_output_cable(self, output_cable): 
+        raise RuntimeError("RX module can't have an output cable")
+    
+    def low_pulse_received(self):
+        return self.low_pulse
     
     def tick(self):
         return []
@@ -118,7 +133,7 @@ class Broadcaster(Module):
     def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
         if self.input_gate:
             raise RuntimeError("Input of broadcaster already set")
-        def set_input_func(input: Optional[Pulse]):
+        def set_input_func(input: Pulse):
             self.input_gate = input
         return set_input_func
 
@@ -161,7 +176,7 @@ class FlipFlop(Module):
         self.position = self.FlipFlopState.OFF
 
     def get_input_func(self) -> Callable[[Optional[Pulse]], None]:
-        def set_input_func(input: Optional[Pulse]):
+        def set_input_func(input: Pulse):
             self.last_input = input
         return set_input_func
 
@@ -191,11 +206,12 @@ def parse_data(input: List[str]) -> Tuple[Dict[str, Module], List[Cable]]:
         elif from_module_str[0] == "&":
             from_module_type = Conjunction
             from_module = from_module_str[1:]
-        else:
-            if from_module_str != "broadcaster":
-                raise RuntimeError(f"Unable to find type of module '{from_module_str}'")
+        elif from_module_str == "broadcaster":
             from_module_type = Broadcaster
             from_module = from_module_str
+        else:
+            raise RuntimeError(f"Unable to parse module '{from_module_str}'")
+            
         to_module_list = to_module_list_str.split(", ")
         parsed_entries.append((from_module_type, from_module, to_module_list))
 
@@ -206,6 +222,7 @@ def parse_data(input: List[str]) -> Tuple[Dict[str, Module], List[Cable]]:
     for parsed_entry in parsed_entries:
         module_type, module_name, _ = parsed_entry
         module_dict[module_name] = module_type(module_name)
+    module_dict["rx"] = RX("rx")
 
     # Connect modules
     cables = []
@@ -214,7 +231,7 @@ def parse_data(input: List[str]) -> Tuple[Dict[str, Module], List[Cable]]:
         _, module_name, to_module_name_list = parsed_entry
         for to_module_name in to_module_name_list:
             # If to_module does not exist, add a dummy one
-            cables.append(Cable(module_dict[module_name], module_dict.get(to_module_name, Dummy(to_module_name))))
+            cables.append(Cable(module_dict[module_name], module_dict[to_module_name]))
 
     return module_dict, cables
 
@@ -244,6 +261,18 @@ def count_pulses(cables: List[Cable]):
     # Return tuple: low_pulse, high_pulse
     return tuple(sum(x) for x in zip(*(cable.get_count() for cable in cables)))
 
+def order_by_low_pulses(cables: List[Cable]):
+    output = []
+    for cable in cables:
+        output.append((cable.count_low, cable.count_high, cable))
+    output.sort(key=lambda x: (x[0], x[1]))
+    for out in output:
+        low_pulses, high_pulses, cable = out
+        print(f"{cable.from_module.name} --> {cable.to_module.name}: L: {low_pulses} H: {high_pulses}")
+
+def probe_high_count(module: Module):
+    return module.output_cables[0].count_high
+
 if __name__ == "__main__":
 
     input_data = aocutils.getDataInput(20)
@@ -256,6 +285,31 @@ if __name__ == "__main__":
 
     press_button_n_times(module_dict, 1000, debug=False)
     low_pulses, high_pulses = count_pulses(cables)
-    aocutils.printResult(1, (low_pulses * high_pulses))
+    aocutils.printResult(1, low_pulses * high_pulses)
 
-    #### Part 1 ####
+    #### Part 2 ####
+
+    module_dict, cables = parse_data(input_data) # Parse data again for part 2
+
+    # These are all the modules that appear before the end module 'rx'.
+    # For 'rx' to be LOW, all of these need to be HIGH at the same time.
+    # They are cyclic, therefore we only need to find the minimum common multiple of the first occurrence
+    # of a HIGH on each one of them.
+    first_high_occurence_on = {
+        module_dict["qn"]: None,
+        module_dict["xf"]: None,
+        module_dict["zl"]: None,
+        module_dict["xn"]: None,
+    }
+
+    count = 0
+    while True:
+        count += 1
+        press_button_n_times(module_dict, 1, debug=False)
+        for module, value in first_high_occurence_on.items():
+            if not value and probe_high_count(module) > 0:
+                first_high_occurence_on[module] = count
+        if all(val != None for val in first_high_occurence_on.values()):
+            break
+
+    aocutils.printResult(2, reduce(operator.mul, first_high_occurence_on.values(), 1))
